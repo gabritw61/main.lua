@@ -1,6 +1,4 @@
--- [[ PRISM HUB v2.1 - REWRITTEN FROM SCRATCH ]]
--- Compatível com executadores de PC e Mobile (Solara, Wave, Delta, Fluxus, etc.)
-
+-- [[ PRISM HUB v2.2 - STABLE & OPTIMIZED ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -9,7 +7,7 @@ local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
 
 -- ====================================================================
--- 1. PREVENÇÃO ANTI-AFK
+-- 1. PREVENÇÃO ANTI-AFK (SEGURO)
 -- ====================================================================
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
@@ -17,57 +15,43 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -- ====================================================================
--- 2. ESTADOS DA AUTOMAÇÃO
+-- 2. CONFIGURAÇÕES & ESTADOS
 -- ====================================================================
 local Settings = {
     AutoCollect = false,
-    AutoSell = false,
     AutoChipper = false,
     AutoRollLever = false,
     AutoBuyStumps = false,
     AutoBuyAxes = false,
-    WalkSpeed = 16,
-    JumpPower = 50,
     NoClip = false
 }
 
 -- ====================================================================
--- 3. ENCONTRAR A PARCELA (PLOT) DO JOGADOR
+-- 3. FUNÇÕES DE AUTOMAÇÃO OTIMIZADAS (SEM TRAVAR O JOGO)
 -- ====================================================================
-local function GetMyPlot()
-    if Workspace:FindFirstChild("Plots") then
-        for _, plot in ipairs(Workspace.Plots:GetChildren()) do
-            if plot:FindFirstChild("Owner") and plot.Owner.Value == LocalPlayer then
-                return plot
-            end
-        end
-    end
-    return nil
-end
-
--- ====================================================================
--- 4. FUNÇÕES DE AUTOMAÇÃO
--- ====================================================================
-
--- Disparador universal de gatilhos (ProximityPrompt)
 local function FirePrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
-        fireproximityprompt(prompt)
+        pcall(function()
+            fireproximityprompt(prompt)
+        end)
     end
 end
 
--- Auto Coleta de Madeira/Toras
+-- Auto Coleta (Com delay de segurança para não travar a física do jogo)
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.8) do
         if Settings.AutoCollect then
             pcall(function()
                 local char = LocalPlayer.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
                     for _, obj in ipairs(Workspace:GetDescendants()) do
-                        if (obj.Name:find("Log") or obj.Name:find("Wood") or obj.Name:find("Tree")) and obj:IsA("BasePart") then
-                            if (obj.Position - char.HumanoidRootPart.Position).Magnitude < 50 then
-                                firetouchinterest(char.HumanoidRootPart, obj, 0)
-                                firetouchinterest(char.HumanoidRootPart, obj, 1)
+                        if not Settings.AutoCollect then break end
+                        if (obj.Name:find("Log") or obj.Name:find("Wood")) and obj:IsA("BasePart") then
+                            if (obj.Position - hrp.Position).Magnitude < 35 then
+                                firetouchinterest(hrp, obj, 0)
+                                task.wait(0.05)
+                                firetouchinterest(hrp, obj, 1)
                             end
                         end
                     end
@@ -77,15 +61,14 @@ task.spawn(function()
     end
 end)
 
--- Auto Picotador / Processador (Chipper)
+-- Auto Processador (Chipper)
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(1) do
         if Settings.AutoChipper then
             pcall(function()
-                local myPlot = GetMyPlot()
-                local targetParent = myPlot or Workspace
-                for _, prompt in ipairs(targetParent:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and (prompt.Parent.Name:find("Chipper") or prompt.Name:find("Chipper")) then
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoChipper then break end
+                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Chipper") or (prompt.Parent and prompt.Parent.Name:find("Chipper"))) then
                         FirePrompt(prompt)
                     end
                 end
@@ -94,13 +77,14 @@ task.spawn(function()
     end
 end)
 
--- Auto Alavanca / Roleta (Lever Roll)
+-- Auto Alavanca
 task.spawn(function()
-    while task.wait(1) do
+    while task.wait(1.5) do
         if Settings.AutoRollLever then
             pcall(function()
                 for _, prompt in ipairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Lever") or prompt.Parent.Name:find("Lever")) then
+                    if not Settings.AutoRollLever then break end
+                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Lever") or (prompt.Parent and prompt.Parent.Name:find("Lever"))) then
                         FirePrompt(prompt)
                     end
                 end
@@ -109,33 +93,28 @@ task.spawn(function()
     end
 end)
 
--- Auto Compras (Tocos e Machados)
+-- Auto Compras
 task.spawn(function()
-    while task.wait(1.5) do
+    while task.wait(2) do
         pcall(function()
-            if Settings.AutoBuyStumps or Settings.AutoBuyAxes then
-                -- Varre eventos remotos de compra conhecidos no jogo
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events")
-                if remotes then
-                    if Settings.AutoBuyStumps and remotes:FindFirstChild("BuyStump") then
-                        remotes.BuyStump:FireServer()
-                    end
-                    if Settings.AutoBuyAxes and remotes:FindFirstChild("BuyAxe") then
-                        remotes.BuyAxe:FireServer()
-                    end
+            local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events")
+            if remotes then
+                if Settings.AutoBuyStumps and remotes:FindFirstChild("BuyStump") then
+                    remotes.BuyStump:FireServer()
+                end
+                if Settings.AutoBuyAxes and remotes:FindFirstChild("BuyAxe") then
+                    remotes.BuyAxe:FireServer()
                 end
             end
         end)
     end
 end)
 
--- ====================================================================
--- 5. FUNÇÕES DE MOBILIDADE (NOCLIP & MOVEMENT)
--- ====================================================================
+-- NoClip Seguro (Sem quebrar o modelo do jogador)
 RunService.Stepped:Connect(function()
     if Settings.NoClip and LocalPlayer.Character then
         for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
+            if part:IsA("BasePart") and part.CanCollide then
                 part.CanCollide = false
             end
         end
@@ -143,16 +122,21 @@ RunService.Stepped:Connect(function()
 end)
 
 -- ====================================================================
--- 6. INTERFACE GRÁFICA (UI) CUSTOMIZADA
+-- 4. INTERFACE GRÁFICA COM BOTOES DE MINIMIZAR E FECHAR
 -- ====================================================================
+local CoreGui = game:GetService("CoreGui")
+if CoreGui:FindFirstChild("PrismHubRemake") then
+    CoreGui.PrismHubRemake:Destroy()
+end
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrismHubRemake"
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+MainFrame.Size = UDim2.new(0, 300, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -180)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -162,21 +146,59 @@ MainFrame.Parent = ScreenGui
 local UICorner = Instance.new("UICorner", MainFrame)
 UICorner.CornerRadius = UDim.new(0, 8)
 
+-- Barra Superior (Header)
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 35)
+Header.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+local HeaderCorner = Instance.new("UICorner", Header)
+HeaderCorner.CornerRadius = UDim.new(0, 8)
+
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 45)
-Title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-Title.Text = "Prism Hub v2.1 | My Wood Farm"
+Title.Size = UDim2.new(1, -70, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Prism Hub v2.2"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
+Title.TextSize = 14
 Title.Font = Enum.Font.SourceSansBold
-Title.Parent = MainFrame
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
 
-local TitleCorner = Instance.new("UICorner", Title)
-TitleCorner.CornerRadius = UDim.new(0, 8)
+-- Botão Minimizar (_)
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 25, 0, 25)
+MinimizeBtn.Position = UDim2.new(1, -55, 0, 5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.TextSize = 16
+MinimizeBtn.Parent = Header
 
+local MinCorner = Instance.new("UICorner", MinimizeBtn)
+MinCorner.CornerRadius = UDim.new(0, 4)
+
+-- Botão Fechar (X)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Position = UDim2.new(1, -28, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextSize = 14
+CloseBtn.Parent = Header
+
+local CloseCorner = Instance.new("UICorner", CloseBtn)
+CloseCorner.CornerRadius = UDim.new(0, 4)
+
+-- Container dos Botões
 local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, -20, 1, -55)
-Scroll.Position = UDim2.new(0, 10, 0, 50)
+Scroll.Size = UDim2.new(1, -16, 1, -45)
+Scroll.Position = UDim2.new(0, 8, 0, 40)
 Scroll.BackgroundTransparency = 1
 Scroll.ScrollBarThickness = 4
 Scroll.Parent = MainFrame
@@ -184,16 +206,16 @@ Scroll.Parent = MainFrame
 local Layout = Instance.new("UIListLayout")
 Layout.Parent = Scroll
 Layout.SortOrder = Enum.SortOrder.LayoutOrder
-Layout.Padding = UDim.new(0, 8)
+Layout.Padding = UDim.new(0, 6)
 
 local function CreateToggle(text, key)
     local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(1, 0, 0, 38)
-    Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    Btn.Size = UDim2.new(1, 0, 0, 35)
+    Btn.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
     Btn.Text = text .. " [OFF]"
     Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
     Btn.Font = Enum.Font.SourceSansSemibold
-    Btn.TextSize = 14
+    Btn.TextSize = 13
     Btn.Parent = Scroll
 
     local BtnCorner = Instance.new("UICorner", Btn)
@@ -207,23 +229,39 @@ local function CreateToggle(text, key)
             Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         else
             Btn.Text = text .. " [OFF]"
-            Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+            Btn.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
             Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
         end
     end)
 end
 
--- Adicionando os Botões
+-- Lista de Funções
 CreateToggle("Auto Coletar Madeira", "AutoCollect")
 CreateToggle("Auto Processar (Chipper)", "AutoChipper")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Auto Comprar Tocos", "AutoBuyStumps")
 CreateToggle("Auto Comprar Machados", "AutoBuyAxes")
-CreateToggle("Ativar NoClip (Atravessar)", "NoClip")
+CreateToggle("Ativar NoClip", "NoClip")
 
--- Ajustar tamanho do Scroll automaticamente
 Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     Scroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 10)
 end)
 
-print("[PRISM HUB]: Script reescrito e carregado com sucesso!")
+-- Ações dos Botões da Barra
+local minimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    Scroll.Visible = not minimized
+    MainFrame.Size = minimized and UDim2.new(0, 300, 0, 35) or UDim2.new(0, 300, 0, 360)
+    MinimizeBtn.Text = minimized and "+" or "-"
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    -- Desativa todas as funções ao fechar
+    for k in pairs(Settings) do
+        Settings[k] = false
+    end
+    ScreenGui:Destroy()
+end)
+
+print("[PRISM HUB v2.2]: Carregado com sucesso!")
