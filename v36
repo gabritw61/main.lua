@@ -1,0 +1,97 @@
+-- [[ PRISM HUB v3.6 - PLAYERGUI FALLBACK ]]
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+
+local Settings = {
+    AutoFarmLoop = false,
+    LoopDelay = 3
+}
+
+local CustomBaseCFrame = nil
+local LastWoodCFrame = nil
+
+-- Loop de Automação Simples
+task.spawn(function()
+    while true do
+        if Settings.AutoFarmLoop then
+            pcall(function()
+                local char = LocalPlayer and LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                
+                if hrp and CustomBaseCFrame then
+                    LastWoodCFrame = hrp.CFrame
+
+                    -- Intervalo de Coleta
+                    task.wait(2)
+
+                    -- Teleporta para a Base
+                    if Settings.AutoFarmLoop then
+                        hrp.CFrame = CustomBaseCFrame + Vector3.new(0, 3, 0)
+                        task.wait(2)
+                    end
+
+                    -- Retorna para a Floresta
+                    if Settings.AutoFarmLoop and LastWoodCFrame and LocalPlayer.Character then
+                        LocalPlayer.Character.HumanoidRootPart.CFrame = LastWoodCFrame
+                    end
+                end
+            end)
+        end
+        task.wait(Settings.LoopDelay)
+    end
+end)
+
+-- UI DIRETA NO PLAYERGUI (Burlar erro de CoreGui)
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+if PlayerGui:FindFirstChild("PrismUI_Simple") then
+    PlayerGui.PrismUI_Simple:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PrismUI_Simple"
+ScreenGui.Parent = PlayerGui
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 240, 0, 160)
+Frame.Position = UDim2.new(0.5, -120, 0.3, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "Prism Hub v3.6 (PlayerGui)"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+Title.Parent = Frame
+
+local BtnBase = Instance.new("TextButton")
+BtnBase.Size = UDim2.new(0.9, 0, 0, 35)
+BtnBase.Position = UDim2.new(0.05, 0, 0.25, 0)
+BtnBase.Text = "📍 Salvar Base"
+BtnBase.BackgroundColor3 = Color3.fromRGB(70, 50, 120)
+BtnBase.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnBase.Parent = Frame
+
+BtnBase.MouseButton1Click:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        CustomBaseCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+        BtnBase.Text = "✅ Base Salva!"
+    end
+end)
+
+local BtnToggle = Instance.new("TextButton")
+BtnToggle.Size = UDim2.new(0.9, 0, 0, 35)
+BtnToggle.Position = UDim2.new(0.05, 0, 0.55, 0)
+BtnToggle.Text = "Auto Ciclo [OFF]"
+BtnToggle.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+BtnToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnToggle.Parent = Frame
+
+BtnToggle.MouseButton1Click:Connect(function()
+    Settings.AutoFarmLoop = not Settings.AutoFarmLoop
+    BtnToggle.Text = Settings.AutoFarmLoop and "Auto Ciclo [ON]" or "Auto Ciclo [OFF]"
+    BtnToggle.BackgroundColor3 = Settings.AutoFarmLoop and Color3.fromRGB(40, 140, 70) or Color3.fromRGB(50, 50, 60)
+end)
