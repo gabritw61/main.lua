@@ -1,35 +1,31 @@
--- [[ PRISM HUB v2.2 - STABLE & OPTIMIZED ]]
+-- [[ PRISM HUB v2.3 - FIXED PROXIMITY & UI CONTROLS ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
+local CoreGui = game:GetService("CoreGui")
 
--- ====================================================================
--- 1. PREVENÇÃO ANTI-AFK (SEGURO)
--- ====================================================================
+-- Destruir interfaces antigas duplicadas
+if CoreGui:FindFirstChild("PrismHubUI") then
+    CoreGui.PrismHubUI:Destroy()
+end
+
+-- Anti-AFK
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new(0, 0))
 end)
 
--- ====================================================================
--- 2. CONFIGURAÇÕES & ESTADOS
--- ====================================================================
 local Settings = {
     AutoCollect = false,
     AutoChipper = false,
     AutoRollLever = false,
-    AutoBuyStumps = false,
-    AutoBuyAxes = false,
     NoClip = false
 }
 
--- ====================================================================
--- 3. FUNÇÕES DE AUTOMAÇÃO OTIMIZADAS (SEM TRAVAR O JOGO)
--- ====================================================================
-local function FirePrompt(prompt)
+-- Função segura para simular o pressionamento da tecla "E" (ProximityPrompt)
+local function TriggerPrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
         pcall(function()
             fireproximityprompt(prompt)
@@ -37,9 +33,9 @@ local function FirePrompt(prompt)
     end
 end
 
--- Auto Coleta (Com delay de segurança para não travar a física do jogo)
+-- Loop de Coleta de Madeira (Simula a tecla "E" no raio do jogador)
 task.spawn(function()
-    while task.wait(0.8) do
+    while task.wait(0.3) do
         if Settings.AutoCollect then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -47,11 +43,14 @@ task.spawn(function()
                 if hrp then
                     for _, obj in ipairs(Workspace:GetDescendants()) do
                         if not Settings.AutoCollect then break end
-                        if (obj.Name:find("Log") or obj.Name:find("Wood")) and obj:IsA("BasePart") then
-                            if (obj.Position - hrp.Position).Magnitude < 35 then
-                                firetouchinterest(hrp, obj, 0)
-                                task.wait(0.05)
-                                firetouchinterest(hrp, obj, 1)
+                        if obj:IsA("ProximityPrompt") then
+                            local parentName = obj.Parent and obj.Parent.Name or ""
+                            -- Identifica se o objeto é uma madeira/tora
+                            if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or obj.Name:find("Wood") then
+                                local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
+                                if part and (part.Position - hrp.Position).Magnitude <= (obj.MaxActivationDistance or 20) then
+                                    TriggerPrompt(obj)
+                                end
                             end
                         end
                     end
@@ -61,60 +60,34 @@ task.spawn(function()
     end
 end)
 
--- Auto Processador (Chipper)
+-- Loop para Picotador (Chipper) e Alavanca
 task.spawn(function()
-    while task.wait(1) do
-        if Settings.AutoChipper then
-            pcall(function()
-                for _, prompt in ipairs(Workspace:GetDescendants()) do
-                    if not Settings.AutoChipper then break end
-                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Chipper") or (prompt.Parent and prompt.Parent.Name:find("Chipper"))) then
-                        FirePrompt(prompt)
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- Auto Alavanca
-task.spawn(function()
-    while task.wait(1.5) do
-        if Settings.AutoRollLever then
-            pcall(function()
-                for _, prompt in ipairs(Workspace:GetDescendants()) do
-                    if not Settings.AutoRollLever then break end
-                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Lever") or (prompt.Parent and prompt.Parent.Name:find("Lever"))) then
-                        FirePrompt(prompt)
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- Auto Compras
-task.spawn(function()
-    while task.wait(2) do
+    while task.wait(0.5) do
         pcall(function()
-            local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events")
-            if remotes then
-                if Settings.AutoBuyStumps and remotes:FindFirstChild("BuyStump") then
-                    remotes.BuyStump:FireServer()
-                end
-                if Settings.AutoBuyAxes and remotes:FindFirstChild("BuyAxe") then
-                    remotes.BuyAxe:FireServer()
+            if Settings.AutoChipper or Settings.AutoRollLever then
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") then
+                        local pName = prompt.Name
+                        local parentName = prompt.Parent and prompt.Parent.Name or ""
+                        
+                        if Settings.AutoChipper and (pName:find("Chipper") or parentName:find("Chipper")) then
+                            TriggerPrompt(prompt)
+                        end
+                        if Settings.AutoRollLever and (pName:find("Lever") or parentName:find("Lever")) then
+                            TriggerPrompt(prompt)
+                        end
+                    end
                 end
             end
         end)
     end
 end)
 
--- NoClip Seguro (Sem quebrar o modelo do jogador)
+-- NoClip
 RunService.Stepped:Connect(function()
     if Settings.NoClip and LocalPlayer.Character then
         for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
@@ -122,22 +95,18 @@ RunService.Stepped:Connect(function()
 end)
 
 -- ====================================================================
--- 4. INTERFACE GRÁFICA COM BOTOES DE MINIMIZAR E FECHAR
+-- INTERFACE GRÁFICA (UI)
 -- ====================================================================
-local CoreGui = game:GetService("CoreGui")
-if CoreGui:FindFirstChild("PrismHubRemake") then
-    CoreGui.PrismHubRemake:Destroy()
-end
-
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "PrismHubRemake"
+ScreenGui.Name = "PrismHubUI"
 ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 360)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -180)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 280, 0, 320)
+MainFrame.Position = UDim2.new(0.5, -140, 0.4, -160)
+MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -146,10 +115,10 @@ MainFrame.Parent = ScreenGui
 local UICorner = Instance.new("UICorner", MainFrame)
 UICorner.CornerRadius = UDim.new(0, 8)
 
--- Barra Superior (Header)
+-- Barra Superior
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 35)
-Header.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+Header.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
 Header.BorderSizePixel = 0
 Header.Parent = MainFrame
 
@@ -160,18 +129,18 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.2"
+Title.Text = "Prism Hub v2.3"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 14
 Title.Font = Enum.Font.SourceSansBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
 
--- Botão Minimizar (_)
+-- Botão Minimizar (-)
 local MinimizeBtn = Instance.new("TextButton")
-MinimizeBtn.Size = UDim2.new(0, 25, 0, 25)
-MinimizeBtn.Position = UDim2.new(1, -55, 0, 5)
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+MinimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+MinimizeBtn.Position = UDim2.new(1, -54, 0, 5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 MinimizeBtn.Text = "-"
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.Font = Enum.Font.SourceSansBold
@@ -183,40 +152,40 @@ MinCorner.CornerRadius = UDim.new(0, 4)
 
 -- Botão Fechar (X)
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
 CloseBtn.Position = UDim2.new(1, -28, 0, 5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.Font = Enum.Font.SourceSansBold
-CloseBtn.TextSize = 14
+CloseBtn.TextSize = 13
 CloseBtn.Parent = Header
 
 local CloseCorner = Instance.new("UICorner", CloseBtn)
 CloseCorner.CornerRadius = UDim.new(0, 4)
 
--- Container dos Botões
-local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, -16, 1, -45)
-Scroll.Position = UDim2.new(0, 8, 0, 40)
-Scroll.BackgroundTransparency = 1
-Scroll.ScrollBarThickness = 4
-Scroll.Parent = MainFrame
+-- Area de Conteúdo
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Size = UDim2.new(1, -16, 1, -45)
+ContentFrame.Position = UDim2.new(0, 8, 0, 40)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
 
 local Layout = Instance.new("UIListLayout")
-Layout.Parent = Scroll
+Layout.Parent = ContentFrame
 Layout.SortOrder = Enum.SortOrder.LayoutOrder
 Layout.Padding = UDim.new(0, 6)
 
 local function CreateToggle(text, key)
     local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(1, 0, 0, 35)
-    Btn.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
+    Btn.Size = UDim2.new(1, 0, 0, 36)
+    Btn.BackgroundColor3 = Color3.fromRGB(36, 36, 48)
     Btn.Text = text .. " [OFF]"
     Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
     Btn.Font = Enum.Font.SourceSansSemibold
     Btn.TextSize = 13
-    Btn.Parent = Scroll
+    Btn.Parent = ContentFrame
 
     local BtnCorner = Instance.new("UICorner", Btn)
     BtnCorner.CornerRadius = UDim.new(0, 6)
@@ -229,39 +198,30 @@ local function CreateToggle(text, key)
             Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         else
             Btn.Text = text .. " [OFF]"
-            Btn.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
+            Btn.BackgroundColor3 = Color3.fromRGB(36, 36, 48)
             Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
         end
     end)
 end
 
--- Lista de Funções
-CreateToggle("Auto Coletar Madeira", "AutoCollect")
-CreateToggle("Auto Processar (Chipper)", "AutoChipper")
-CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
-CreateToggle("Auto Comprar Tocos", "AutoBuyStumps")
-CreateToggle("Auto Comprar Machados", "AutoBuyAxes")
-CreateToggle("Ativar NoClip", "NoClip")
-
-Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    Scroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 10)
-end)
-
--- Ações dos Botões da Barra
-local minimized = false
+-- Controles da Interface
+local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    Scroll.Visible = not minimized
-    MainFrame.Size = minimized and UDim2.new(0, 300, 0, 35) or UDim2.new(0, 300, 0, 360)
-    MinimizeBtn.Text = minimized and "+" or "-"
+    isMinimized = not isMinimized
+    ContentFrame.Visible = not isMinimized
+    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 320)
+    MinimizeBtn.Text = isMinimized and "+" or "-"
 end)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    -- Desativa todas as funções ao fechar
     for k in pairs(Settings) do
         Settings[k] = false
     end
     ScreenGui:Destroy()
 end)
 
-print("[PRISM HUB v2.2]: Carregado com sucesso!")
+-- Botões da Lista
+CreateToggle("Auto Coletar (Pressionar E)", "AutoCollect")
+CreateToggle("Auto Processar (Chipper)", "AutoChipper")
+CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
+CreateToggle("Ativar NoClip", "NoClip")
