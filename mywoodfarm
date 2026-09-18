@@ -1,4 +1,4 @@
--- [[ PRISM HUB v2.7 - TELEPORT TO SELLER ]]
+-- [[ PRISM HUB v2.8 - MY BASE ONLY TELEPORT ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -6,12 +6,10 @@ local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
 
--- Limpa UIs anteriores
 if CoreGui:FindFirstChild("PrismHubUI") then
     CoreGui.PrismHubUI:Destroy()
 end
 
--- Anti-AFK
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new(0, 0))
@@ -24,7 +22,6 @@ local Settings = {
     NoClip = false
 }
 
--- Acionar ProximityPrompt (Tecla E)
 local function TriggerPrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
         pcall(function()
@@ -33,17 +30,45 @@ local function TriggerPrompt(prompt)
     end
 end
 
--- Ponto de Referência para Venda / Serraria
-local function GetSellCFrame()
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
-        if name:find("sell") or name:find("chipper") or name:find("sawmill") or name:find("deposit") then
-            if obj:IsA("BasePart") then
-                return obj.CFrame
-            elseif obj:IsA("ProximityPrompt") and obj.Parent and obj.Parent:IsA("BasePart") then
-                return obj.Parent.CFrame
+-- ENCONTRAR APENAS A SUA PARCELA/BASE (MY PLOT)
+local function GetMyBasePlot()
+    if Workspace:FindFirstChild("Plots") then
+        for _, plot in ipairs(Workspace.Plots:GetChildren()) do
+            -- Verifica se o dono do Plot é o LocalPlayer
+            local owner = plot:FindFirstChild("Owner") or plot:FindFirstChild("OwnerValue")
+            if owner and (owner.Value == LocalPlayer or owner.Value == LocalPlayer.Name) then
+                return plot
             end
         end
+    end
+    -- Busca alternativa pelo mapa
+    for _, plot in ipairs(Workspace:GetChildren()) do
+        if plot.Name:find("Plot") or plot.Name:find("Land") then
+            local owner = plot:FindFirstChild("Owner")
+            if owner and owner.Value == LocalPlayer then
+                return plot
+            end
+        end
+    end
+    return nil
+end
+
+-- ENCONTRAR O PONTO DE VENDA DENTRO DA SUA BASE
+local function GetMySellCFrame()
+    local myPlot = GetMyBasePlot()
+    if myPlot then
+        for _, obj in ipairs(myPlot:GetDescendants()) do
+            local name = obj.Name:lower()
+            if name:find("sell") or name:find("chipper") or name:find("sawmill") or name:find("deposit") or name:find("collector") then
+                if obj:IsA("BasePart") then
+                    return obj.CFrame
+                elseif obj:IsA("ProximityPrompt") and obj.Parent and obj.Parent:IsA("BasePart") then
+                    return obj.Parent.CFrame
+                end
+            end
+        end
+        -- Se não achar ponto com nome específico, pega a parte principal do plot
+        if myPlot:IsA("BasePart") then return myPlot.CFrame end
     end
     return nil
 end
@@ -76,7 +101,7 @@ task.spawn(function()
     end
 end)
 
--- LOOP 2: AUTO VENDER (TELEPORTA O JOGADOR ATÉ A SERRARIA E PRESSIONA E)
+-- LOOP 2: AUTO VENDER (TELEPORTA APENAS PARA A SUA BASE E DISPARA "E")
 task.spawn(function()
     while task.wait(0.8) do
         if Settings.AutoSell then
@@ -85,22 +110,19 @@ task.spawn(function()
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                local sellCFrame = GetSellCFrame()
-                if sellCFrame then
-                    -- Move o jogador até a serraria
-                    hrp.CFrame = sellCFrame + Vector3.new(0, 3, 0)
+                local mySellCFrame = GetMySellCFrame()
+                if mySellCFrame then
+                    -- Teleporta para a SUA serraria
+                    hrp.CFrame = mySellCFrame + Vector3.new(0, 3, 0)
                     task.wait(0.2)
 
-                    -- Dispara o ProximityPrompt de venda
-                    for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    -- Dispara apenas prompts na SUA base
+                    local myPlot = GetMyBasePlot()
+                    local searchArea = myPlot or Workspace
+                    for _, prompt in ipairs(searchArea:GetDescendants()) do
                         if not Settings.AutoSell then break end
                         if prompt:IsA("ProximityPrompt") then
-                            local pName = prompt.Name:lower()
-                            local parentName = (prompt.Parent and prompt.Parent.Name or ""):lower()
-
-                            if pName:find("sell") or parentName:find("sell") or pName:find("chipper") or parentName:find("chipper") or pName:find("deposit") then
-                                TriggerPrompt(prompt)
-                            end
+                            TriggerPrompt(prompt)
                         end
                     end
                 end
@@ -136,7 +158,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- INTERFACE GRÁFICA (UI)
+-- INTERFACE GRÁFICA
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrismHubUI"
 ScreenGui.Parent = CoreGui
@@ -153,7 +175,6 @@ MainFrame.Parent = ScreenGui
 
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- Header
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 35)
 Header.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
@@ -166,7 +187,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.7"
+Title.Text = "Prism Hub v2.8 (My Base)"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
@@ -242,6 +263,6 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 CreateToggle("Auto Coletar Madeira (E)", "AutoCollect")
-CreateToggle("Auto Teleport & Vender (E)", "AutoSell")
+CreateToggle("Auto Teleport Minha Base & Vender", "AutoSell")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Ativar NoClip", "NoClip")
