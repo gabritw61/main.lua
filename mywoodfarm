@@ -1,4 +1,4 @@
--- [[ PRISM HUB v2.3 - FIXED PROXIMITY & UI CONTROLS ]]
+-- [[ PRISM HUB v2.4 - AUTOMATED FARM & SELL LOOP ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -18,13 +18,13 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 local Settings = {
-    AutoCollect = false,
+    AutoFarmFull = false,
     AutoChipper = false,
     AutoRollLever = false,
     NoClip = false
 }
 
--- Função segura para simular o pressionamento da tecla "E" (ProximityPrompt)
+-- Função segura para simular o pressionamento da tecla "E"
 local function TriggerPrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
         pcall(function()
@@ -33,25 +33,40 @@ local function TriggerPrompt(prompt)
     end
 end
 
--- Loop de Coleta de Madeira (Simula a tecla "E" no raio do jogador)
+-- Loop Principal de Automação (Coleta + Venda/Processamento na Serraria)
 task.spawn(function()
-    while task.wait(0.3) do
-        if Settings.AutoCollect then
+    while task.wait(0.5) do
+        if Settings.AutoFarmFull then
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    for _, obj in ipairs(Workspace:GetDescendants()) do
-                        if not Settings.AutoCollect then break end
-                        if obj:IsA("ProximityPrompt") then
-                            local parentName = obj.Parent and obj.Parent.Name or ""
-                            -- Identifica se o objeto é uma madeira/tora
-                            if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or obj.Name:find("Wood") then
-                                local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
-                                if part and (part.Position - hrp.Position).Magnitude <= (obj.MaxActivationDistance or 20) then
-                                    TriggerPrompt(obj)
-                                end
+                if not hrp then return end
+
+                -- 1. BUSCA E COLETA MADEIRA PRÓXIMA (Pressiona "E")
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoFarmFull then break end
+                    if obj:IsA("ProximityPrompt") then
+                        local parentName = obj.Parent and obj.Parent.Name or ""
+                        if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or obj.Name:find("Wood") then
+                            local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
+                            if part and (part.Position - hrp.Position).Magnitude <= (obj.MaxActivationDistance or 25) then
+                                TriggerPrompt(obj)
+                                task.wait(0.2)
                             end
+                        end
+                    end
+                end
+
+                -- 2. VAI ATÉ A SERRARIA / PROCESSADOR E PRESSIONA "E" PARA VENDER
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoFarmFull then break end
+                    if prompt:IsA("ProximityPrompt") then
+                        local pName = prompt.Name
+                        local parentName = prompt.Parent and prompt.Parent.Name or ""
+
+                        -- Procura por gatilhos de Venda, Serraria ou Processador (Sawmill / Sell / Chipper)
+                        if pName:find("Sell") or parentName:find("Sell") or pName:find("Saw") or parentName:find("Saw") or pName:find("Chipper") or parentName:find("Chipper") then
+                            TriggerPrompt(prompt)
                         end
                     end
                 end
@@ -60,26 +75,21 @@ task.spawn(function()
     end
 end)
 
--- Loop para Picotador (Chipper) e Alavanca
+-- Loop Secundário (Alavanca/Rolls isolados)
 task.spawn(function()
-    while task.wait(0.5) do
-        pcall(function()
-            if Settings.AutoChipper or Settings.AutoRollLever then
+    while task.wait(0.8) do
+        if Settings.AutoRollLever then
+            pcall(function()
                 for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoRollLever then break end
                     if prompt:IsA("ProximityPrompt") then
-                        local pName = prompt.Name
-                        local parentName = prompt.Parent and prompt.Parent.Name or ""
-                        
-                        if Settings.AutoChipper and (pName:find("Chipper") or parentName:find("Chipper")) then
-                            TriggerPrompt(prompt)
-                        end
-                        if Settings.AutoRollLever and (pName:find("Lever") or parentName:find("Lever")) then
+                        if prompt.Name:find("Lever") or (prompt.Parent and prompt.Parent.Name:find("Lever")) then
                             TriggerPrompt(prompt)
                         end
                     end
                 end
-            end
-        end)
+            end)
+        end
     end
 end)
 
@@ -104,8 +114,8 @@ ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 280, 0, 320)
-MainFrame.Position = UDim2.new(0.5, -140, 0.4, -160)
+MainFrame.Size = UDim2.new(0, 280, 0, 280)
+MainFrame.Position = UDim2.new(0.5, -140, 0.4, -140)
 MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -115,7 +125,7 @@ MainFrame.Parent = ScreenGui
 local UICorner = Instance.new("UICorner", MainFrame)
 UICorner.CornerRadius = UDim.new(0, 8)
 
--- Barra Superior
+-- Header
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 35)
 Header.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
@@ -129,9 +139,9 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.3"
+Title.Text = "Prism Hub v2.4 - Auto Farm"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 14
+Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
@@ -164,7 +174,7 @@ CloseBtn.Parent = Header
 local CloseCorner = Instance.new("UICorner", CloseBtn)
 CloseCorner.CornerRadius = UDim.new(0, 4)
 
--- Area de Conteúdo
+-- Content Frame
 local ContentFrame = Instance.new("Frame")
 ContentFrame.Name = "ContentFrame"
 ContentFrame.Size = UDim2.new(1, -16, 1, -45)
@@ -204,12 +214,12 @@ local function CreateToggle(text, key)
     end)
 end
 
--- Controles da Interface
+-- Ações Minimizar/Fechar
 local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     ContentFrame.Visible = not isMinimized
-    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 320)
+    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 280)
     MinimizeBtn.Text = isMinimized and "+" or "-"
 end)
 
@@ -220,8 +230,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- Botões da Lista
-CreateToggle("Auto Coletar (Pressionar E)", "AutoCollect")
-CreateToggle("Auto Processar (Chipper)", "AutoChipper")
+-- Botões do Menu
+CreateToggle("Auto Coletar & Vender (Full Loop)", "AutoFarmFull")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Ativar NoClip", "NoClip")
