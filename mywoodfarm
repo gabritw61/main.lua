@@ -1,26 +1,139 @@
--- [[ Prism Hub v2.1 - Standalone Version ]]
--- Carregamento e inicialização segura de ambiente
+-- [[ PRISM HUB v2.1 - REWRITTEN FROM SCRATCH ]]
+-- Compatível com executadores de PC e Mobile (Solara, Wave, Delta, Fluxus, etc.)
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
--- Prevenção Anti-AFK integrada
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
+
+-- ====================================================================
+-- 1. PREVENÇÃO ANTI-AFK
+-- ====================================================================
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new(0, 0))
 end)
 
--- Módulos de Mobilidade (Fly / Speed / NoClip)
-local FlySpeed = 50
-local Flying = false
-local WalkSpeedValue = 16
-local JumpPowerValue = 50
-local NoClipEnabled = false
+-- ====================================================================
+-- 2. ESTADOS DA AUTOMAÇÃO
+-- ====================================================================
+local Settings = {
+    AutoCollect = false,
+    AutoSell = false,
+    AutoChipper = false,
+    AutoRollLever = false,
+    AutoBuyStumps = false,
+    AutoBuyAxes = false,
+    WalkSpeed = 16,
+    JumpPower = 50,
+    NoClip = false
+}
 
+-- ====================================================================
+-- 3. ENCONTRAR A PARCELA (PLOT) DO JOGADOR
+-- ====================================================================
+local function GetMyPlot()
+    if Workspace:FindFirstChild("Plots") then
+        for _, plot in ipairs(Workspace.Plots:GetChildren()) do
+            if plot:FindFirstChild("Owner") and plot.Owner.Value == LocalPlayer then
+                return plot
+            end
+        end
+    end
+    return nil
+end
+
+-- ====================================================================
+-- 4. FUNÇÕES DE AUTOMAÇÃO
+-- ====================================================================
+
+-- Disparador universal de gatilhos (ProximityPrompt)
+local function FirePrompt(prompt)
+    if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
+        fireproximityprompt(prompt)
+    end
+end
+
+-- Auto Coleta de Madeira/Toras
+task.spawn(function()
+    while task.wait(0.3) do
+        if Settings.AutoCollect then
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    for _, obj in ipairs(Workspace:GetDescendants()) do
+                        if (obj.Name:find("Log") or obj.Name:find("Wood") or obj.Name:find("Tree")) and obj:IsA("BasePart") then
+                            if (obj.Position - char.HumanoidRootPart.Position).Magnitude < 50 then
+                                firetouchinterest(char.HumanoidRootPart, obj, 0)
+                                firetouchinterest(char.HumanoidRootPart, obj, 1)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Auto Picotador / Processador (Chipper)
+task.spawn(function()
+    while task.wait(0.5) do
+        if Settings.AutoChipper then
+            pcall(function()
+                local myPlot = GetMyPlot()
+                local targetParent = myPlot or Workspace
+                for _, prompt in ipairs(targetParent:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") and (prompt.Parent.Name:find("Chipper") or prompt.Name:find("Chipper")) then
+                        FirePrompt(prompt)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Auto Alavanca / Roleta (Lever Roll)
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.AutoRollLever then
+            pcall(function()
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Lever") or prompt.Parent.Name:find("Lever")) then
+                        FirePrompt(prompt)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Auto Compras (Tocos e Machados)
+task.spawn(function()
+    while task.wait(1.5) do
+        pcall(function()
+            if Settings.AutoBuyStumps or Settings.AutoBuyAxes then
+                -- Varre eventos remotos de compra conhecidos no jogo
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events")
+                if remotes then
+                    if Settings.AutoBuyStumps and remotes:FindFirstChild("BuyStump") then
+                        remotes.BuyStump:FireServer()
+                    end
+                    if Settings.AutoBuyAxes and remotes:FindFirstChild("BuyAxe") then
+                        remotes.BuyAxe:FireServer()
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ====================================================================
+-- 5. FUNÇÕES DE MOBILIDADE (NOCLIP & MOVEMENT)
+-- ====================================================================
 RunService.Stepped:Connect(function()
-    if NoClipEnabled and LocalPlayer.Character then
+    if Settings.NoClip and LocalPlayer.Character then
         for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
@@ -29,116 +142,88 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Sistema de Automação (Farm & Logistics)
-local AutoFarm = false
-local AutoChipper = false
-local AutoBuyStumps = false
-local AutoBuyAxes = false
-local AutoRollLever = false
-
-local function SafeFirePrompt(prompt)
-    if prompt and prompt:IsA("ProximityPrompt") then
-        fireproximityprompt(prompt)
-    end
-end
-
--- Loop de Automação Principal
-task.spawn(function()
-    while task.wait(0.5) do
-        if AutoFarm then
-            pcall(function()
-                -- Interação com toras e itens da parcela
-                for _, item in ipairs(workspace:GetDescendants()) do
-                    if item.Name == "WoodLog" or item.Name == "WoodItem" then
-                        if item:FindFirstChild("TouchInterest") then
-                            firetouchinterest(LocalPlayer.Character.HumanoidRootPart, item, 0)
-                            firetouchinterest(LocalPlayer.Character.HumanoidRootPart, item, 1)
-                        end
-                    end
-                end
-            end)
-        end
-
-        if AutoChipper then
-            pcall(function()
-                for _, prompt in ipairs(workspace:GetDescendants()) do
-                    if prompt.Name == "ChipperPrompt" or prompt.Parent.Name == "Chipper" then
-                        SafeFirePrompt(prompt)
-                    end
-                end
-            end)
-        end
-
-        if AutoRollLever then
-            pcall(function()
-                for _, prompt in ipairs(workspace:GetDescendants()) do
-                    if prompt.Name == "LeverPrompt" then
-                        SafeFirePrompt(prompt)
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- Interface Gráfica Simples (UI Core)
+-- ====================================================================
+-- 6. INTERFACE GRÁFICA (UI) CUSTOMIZADA
+-- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "PrismHubUI"
+ScreenGui.Name = "PrismHubRemake"
 ScreenGui.Parent = game:GetService("CoreGui")
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -190)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.Size = UDim2.new(0, 320, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
+local UICorner = Instance.new("UICorner", MainFrame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-Title.Text = "Prism Hub v2.1 (Standalone)"
+Title.Size = UDim2.new(1, 0, 0, 45)
+Title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+Title.Text = "Prism Hub v2.1 | My Wood Farm"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 Title.Font = Enum.Font.SourceSansBold
 Title.Parent = MainFrame
 
-local Container = Instance.new("UIListLayout")
-Container.Parent = MainFrame
-Container.SortOrder = Enum.SortOrder.LayoutOrder
-Container.Padding = UDim.new(0, 5)
+local TitleCorner = Instance.new("UICorner", Title)
+TitleCorner.CornerRadius = UDim.new(0, 8)
 
-local function CreateButton(text, callback)
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1, -20, 1, -55)
+Scroll.Position = UDim2.new(0, 10, 0, 50)
+Scroll.BackgroundTransparency = 1
+Scroll.ScrollBarThickness = 4
+Scroll.Parent = MainFrame
+
+local Layout = Instance.new("UIListLayout")
+Layout.Parent = Scroll
+Layout.SortOrder = Enum.SortOrder.LayoutOrder
+Layout.Padding = UDim.new(0, 8)
+
+local function CreateToggle(text, key)
     local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(0.9, 0, 0, 35)
-    Btn.Position = UDim2.new(0.05, 0, 0, 0)
-    Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-    Btn.Text = text
-    Btn.TextColor3 = Color3.fromRGB(220, 220, 220)
-    Btn.Font = Enum.Font.SourceSans
+    Btn.Size = UDim2.new(1, 0, 0, 38)
+    Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    Btn.Text = text .. " [OFF]"
+    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Btn.Font = Enum.Font.SourceSansSemibold
     Btn.TextSize = 14
-    Btn.Parent = MainFrame
+    Btn.Parent = Scroll
 
-    local enabled = false
+    local BtnCorner = Instance.new("UICorner", Btn)
+    BtnCorner.CornerRadius = UDim.new(0, 6)
+
     Btn.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        Btn.BackgroundColor3 = enabled and Color3.fromRGB(60, 120, 60) or Color3.fromRGB(45, 45, 60)
-        callback(enabled)
+        Settings[key] = not Settings[key]
+        if Settings[key] then
+            Btn.Text = text .. " [ON]"
+            Btn.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
+            Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            Btn.Text = text .. " [OFF]"
+            Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+            Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end
     end)
 end
 
--- Botões de Controle
-CreateButton("Auto Collect & Sell Wood", function(state) AutoFarm = state end)
-CreateButton("Auto Chipper / Collect", function(state) AutoChipper = state end)
-CreateButton("Auto Roll Lever", function(state) AutoRollLever = state end)
-CreateButton("Toggle NoClip", function(state) NoClipEnabled = state end)
+-- Adicionando os Botões
+CreateToggle("Auto Coletar Madeira", "AutoCollect")
+CreateToggle("Auto Processar (Chipper)", "AutoChipper")
+CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
+CreateToggle("Auto Comprar Tocos", "AutoBuyStumps")
+CreateToggle("Auto Comprar Machados", "AutoBuyAxes")
+CreateToggle("Ativar NoClip (Atravessar)", "NoClip")
 
-CreateButton("Speed Hack (2x)", function(state)
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = state and 32 or 16
-    end
+-- Ajustar tamanho do Scroll automaticamente
+Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 10)
 end)
 
-print("[PRISM HUB]: Script carregado com sucesso sem erros de módulo/require!")
+print("[PRISM HUB]: Script reescrito e carregado com sucesso!")
