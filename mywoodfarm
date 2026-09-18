@@ -1,4 +1,4 @@
--- [[ PRISM HUB v2.6 - SAFE PLAYER TELEPORT FARM ]]
+-- [[ PRISM HUB v2.7 - TELEPORT TO SELLER ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -6,7 +6,7 @@ local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
 
--- Limpeza de UIs anteriores
+-- Limpa UIs anteriores
 if CoreGui:FindFirstChild("PrismHubUI") then
     CoreGui.PrismHubUI:Destroy()
 end
@@ -33,7 +33,22 @@ local function TriggerPrompt(prompt)
     end
 end
 
--- LOOP 1: AUTO COLETAR (Pressiona "E" em madeiras próximas)
+-- Ponto de Referência para Venda / Serraria
+local function GetSellCFrame()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        local name = obj.Name:lower()
+        if name:find("sell") or name:find("chipper") or name:find("sawmill") or name:find("deposit") then
+            if obj:IsA("BasePart") then
+                return obj.CFrame
+            elseif obj:IsA("ProximityPrompt") and obj.Parent and obj.Parent:IsA("BasePart") then
+                return obj.Parent.CFrame
+            end
+        end
+    end
+    return nil
+end
+
+-- LOOP 1: AUTO COLETAR MADEIRA
 task.spawn(function()
     while task.wait(0.4) do
         if Settings.AutoCollect then
@@ -48,7 +63,6 @@ task.spawn(function()
                         local parent = prompt.Parent
                         local parentName = parent and parent.Name or ""
                         
-                        -- Filtra apenas objetos de madeira / árvores / toras
                         if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or prompt.Name:find("Wood") then
                             local part = parent:IsA("BasePart") and parent or parent:FindFirstChildWhichIsA("BasePart")
                             if part and (part.Position - hrp.Position).Magnitude <= 20 then
@@ -62,19 +76,31 @@ task.spawn(function()
     end
 end)
 
--- LOOP 2: AUTO VENDER / PROCESSAR (Vai até o Chipper/Serraria e ativa "E")
+-- LOOP 2: AUTO VENDER (TELEPORTA O JOGADOR ATÉ A SERRARIA E PRESSIONA E)
 task.spawn(function()
-    while task.wait(0.6) do
+    while task.wait(0.8) do
         if Settings.AutoSell then
             pcall(function()
-                for _, prompt in ipairs(Workspace:GetDescendants()) do
-                    if not Settings.AutoSell then break end
-                    if prompt:IsA("ProximityPrompt") then
-                        local pName = prompt.Name
-                        local parentName = prompt.Parent and prompt.Parent.Name or ""
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
 
-                        if pName:find("Sell") or parentName:find("Sell") or pName:find("Chipper") or parentName:find("Chipper") or pName:find("Deposit") then
-                            TriggerPrompt(prompt)
+                local sellCFrame = GetSellCFrame()
+                if sellCFrame then
+                    -- Move o jogador até a serraria
+                    hrp.CFrame = sellCFrame + Vector3.new(0, 3, 0)
+                    task.wait(0.2)
+
+                    -- Dispara o ProximityPrompt de venda
+                    for _, prompt in ipairs(Workspace:GetDescendants()) do
+                        if not Settings.AutoSell then break end
+                        if prompt:IsA("ProximityPrompt") then
+                            local pName = prompt.Name:lower()
+                            local parentName = (prompt.Parent and prompt.Parent.Name or ""):lower()
+
+                            if pName:find("sell") or parentName:find("sell") or pName:find("chipper") or parentName:find("chipper") or pName:find("deposit") then
+                                TriggerPrompt(prompt)
+                            end
                         end
                     end
                 end
@@ -140,7 +166,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.6"
+Title.Text = "Prism Hub v2.7"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
@@ -215,8 +241,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- Botões Separados para Teste Seguro
 CreateToggle("Auto Coletar Madeira (E)", "AutoCollect")
-CreateToggle("Auto Vender / Processar (E)", "AutoSell")
+CreateToggle("Auto Teleport & Vender (E)", "AutoSell")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Ativar NoClip", "NoClip")
