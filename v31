@@ -1,0 +1,210 @@
+-- [[ PRISM HUB v3.1 - NO-TELEPORT FARM ]]
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser")
+local CoreGui = game:GetService("CoreGui")
+
+if CoreGui:FindFirstChild("PrismHubUI") then
+    CoreGui.PrismHubUI:Destroy()
+end
+
+-- Prevenção Anti-AFK
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new(0, 0))
+end)
+
+local Settings = {
+    InfiniteReach = false,
+    AutoRollLever = false,
+    BringWood = false
+}
+
+-- Ativa o "E" ignorando distância física e obstáculos
+local function TriggerPromptRemote(prompt)
+    if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
+        pcall(function()
+            -- Burlar checagem de distância nativa do Roblox
+            local oldDistance = prompt.MaxActivationDistance
+            local oldLineOfSight = prompt.RequiresLineOfSight
+            
+            prompt.RequiresLineOfSight = false
+            prompt.MaxActivationDistance = 999999
+            
+            fireproximityprompt(prompt)
+            
+            prompt.MaxActivationDistance = oldDistance
+            prompt.RequiresLineOfSight = oldLineOfSight
+        end)
+    end
+end
+
+-- LOOP 1: INTERAÇÃO À DISTÂNCIA (COLETA E VENDA SEM SE MOVER)
+task.spawn(function()
+    while task.wait(0.5) do
+        if Settings.InfiniteReach then
+            pcall(function()
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.InfiniteReach then break end
+                    if prompt:IsA("ProximityPrompt") then
+                        local pName = prompt.Name:lower()
+                        local parentName = (prompt.Parent and prompt.Parent.Name or ""):lower()
+                        
+                        -- Interage com Madeiras, Serrarias, Vendedores e Picotadores
+                        if parentName:find("wood") or parentName:find("log") or parentName:find("tree") or pName:find("wood")
+                           or name:find("sell") or pName:find("sell") or name:find("chipper") or pName:find("chipper") or name:find("saw") then
+                            TriggerPromptRemote(prompt)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- LOOP 2: MAGNETIZAR MADEIRAS (Puxa as madeiras para perto de você)
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.BringWood then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    for _, log in ipairs(Workspace:GetDescendants()) do
+                        if not Settings.BringWood then break end
+                        if (log.Name:find("Log") or log.Name:find("Wood")) and log:IsA("BasePart") then
+                            log.CFrame = hrp.CFrame + Vector3.new(0, 2, 0)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- LOOP 3: ALAVANCA
+task.spawn(function()
+    while task.wait(1.5) do
+        if Settings.AutoRollLever then
+            pcall(function()
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoRollLever then break end
+                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Lever") or (prompt.Parent and prompt.Parent.Name:find("Lever"))) then
+                        TriggerPromptRemote(prompt)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- INTERFACE GRÁFICA
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PrismHubUI"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 280, 0, 220)
+MainFrame.Position = UDim2.new(0.5, -140, 0.4, -110)
+MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- Header
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 35)
+Header.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -70, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Prism Hub v3.1 - No Teleport"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+MinimizeBtn.Position = UDim2.new(1, -54, 0, 5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.Parent = Header
+Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+CloseBtn.Position = UDim2.new(1, -28, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.Parent = Header
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 4)
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, -16, 1, -45)
+ContentFrame.Position = UDim2.new(0, 8, 0, 40)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+local Layout = Instance.new("UIListLayout")
+Layout.Parent = ContentFrame
+Layout.Padding = UDim.new(0, 6)
+
+local function CreateToggle(text, key)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 36)
+    Btn.BackgroundColor3 = Color3.fromRGB(36, 36, 48)
+    Btn.Text = text .. " [OFF]"
+    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Btn.Font = Enum.Font.SourceSansSemibold
+    Btn.TextSize = 13
+    Btn.Parent = ContentFrame
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+
+    Btn.MouseButton1Click:Connect(function()
+        Settings[key] = not Settings[key]
+        if Settings[key] then
+            Btn.Text = text .. " [ON]"
+            Btn.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
+            Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            Btn.Text = text .. " [OFF]"
+            Btn.BackgroundColor3 = Color3.fromRGB(36, 36, 48)
+            Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end
+    end)
+end
+
+local isMinimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    ContentFrame.Visible = not isMinimized
+    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 220)
+    MinimizeBtn.Text = isMinimized and "+" or "-"
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    for k in pairs(Settings) do Settings[k] = false end
+    ScreenGui:Destroy()
+end)
+
+CreateToggle("Auto Alcance Infinito (Coletar & Vender)", "InfiniteReach")
+CreateToggle("Puxar Madeiras do Mapa", "BringWood")
+CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
