@@ -1,13 +1,12 @@
--- [[ PRISM HUB v2.5 - FIX AUTO SELL ]]
+-- [[ PRISM HUB v2.6 - SAFE PLAYER TELEPORT FARM ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
 
--- Limpa UIs antigas
+-- Limpeza de UIs anteriores
 if CoreGui:FindFirstChild("PrismHubUI") then
     CoreGui.PrismHubUI:Destroy()
 end
@@ -19,25 +18,13 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 local Settings = {
-    AutoFarmFull = false,
+    AutoCollect = false,
+    AutoSell = false,
     AutoRollLever = false,
     NoClip = false
 }
 
--- Função para encontrar a zona de venda (Plot / Sell Area)
-local function GetSellTarget()
-    -- Tenta encontrar a área de venda no mapa
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj.Name:find("Sell") or obj.Name:find("Collector") or obj.Name:find("Dump") then
-            if obj:IsA("BasePart") then
-                return obj
-            end
-        end
-    end
-    return nil
-end
-
--- Simular Tecla "E"
+-- Acionar ProximityPrompt (Tecla E)
 local function TriggerPrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
         pcall(function()
@@ -46,53 +33,27 @@ local function TriggerPrompt(prompt)
     end
 end
 
--- LOOP PRINCIPAL: Coletar e Vender
+-- LOOP 1: AUTO COLETAR (Pressiona "E" em madeiras próximas)
 task.spawn(function()
-    while task.wait(0.3) do
-        if Settings.AutoFarmFull then
+    while task.wait(0.4) do
+        if Settings.AutoCollect then
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                local sellZone = GetSellTarget()
-
-                -- 1. Coletar Madeiras Próximas via ProximityPrompt
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if not Settings.AutoFarmFull then break end
-                    if obj:IsA("ProximityPrompt") then
-                        local parentName = obj.Parent and obj.Parent.Name or ""
-                        if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or obj.Name:find("Wood") then
-                            local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
-                            if part and (part.Position - hrp.Position).Magnitude <= 25 then
-                                TriggerPrompt(obj)
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoCollect then break end
+                    if prompt:IsA("ProximityPrompt") then
+                        local parent = prompt.Parent
+                        local parentName = parent and parent.Name or ""
+                        
+                        -- Filtra apenas objetos de madeira / árvores / toras
+                        if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or prompt.Name:find("Wood") then
+                            local part = parent:IsA("BasePart") and parent or parent:FindFirstChildWhichIsA("BasePart")
+                            if part and (part.Position - hrp.Position).Magnitude <= 20 then
+                                TriggerPrompt(prompt)
                             end
-                        end
-                    end
-                end
-
-                -- 2. Vender Madeiras no Chão / Inventário
-                -- Move as peças de madeira diretamente para o ponto de venda do terreno
-                for _, log in ipairs(Workspace:GetDescendants()) do
-                    if not Settings.AutoFarmFull then break end
-                    if (log.Name:find("Log") or log.Name:find("Wood")) and log:IsA("BasePart") then
-                        if sellZone then
-                            log.CFrame = sellZone.CFrame
-                        end
-                        if log:FindFirstChildOfClass("TouchTransmitter") or log:FindFirstChild("TouchInterest") then
-                            firetouchinterest(hrp, log, 0)
-                            task.wait(0.02)
-                            firetouchinterest(hrp, log, 1)
-                        end
-                    end
-                end
-
-                -- 3. Dispara os eventos remotos de venda de emergência
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events")
-                if remotes then
-                    for _, remote in ipairs(remotes:GetChildren()) do
-                        if remote.Name:find("Sell") then
-                            remote:FireServer()
                         end
                     end
                 end
@@ -101,9 +62,30 @@ task.spawn(function()
     end
 end)
 
--- Loop da Alavanca / Roleta
+-- LOOP 2: AUTO VENDER / PROCESSAR (Vai até o Chipper/Serraria e ativa "E")
 task.spawn(function()
-    while task.wait(0.8) do
+    while task.wait(0.6) do
+        if Settings.AutoSell then
+            pcall(function()
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if not Settings.AutoSell then break end
+                    if prompt:IsA("ProximityPrompt") then
+                        local pName = prompt.Name
+                        local parentName = prompt.Parent and prompt.Parent.Name or ""
+
+                        if pName:find("Sell") or parentName:find("Sell") or pName:find("Chipper") or parentName:find("Chipper") or pName:find("Deposit") then
+                            TriggerPrompt(prompt)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- LOOP 3: ALAVANCA
+task.spawn(function()
+    while task.wait(1) do
         if Settings.AutoRollLever then
             pcall(function()
                 for _, prompt in ipairs(Workspace:GetDescendants()) do
@@ -128,15 +110,15 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- INTERFACE GRÁFICA
+-- INTERFACE GRÁFICA (UI)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrismHubUI"
 ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 280, 0, 240)
-MainFrame.Position = UDim2.new(0.5, -140, 0.4, -120)
+MainFrame.Size = UDim2.new(0, 280, 0, 260)
+MainFrame.Position = UDim2.new(0.5, -140, 0.4, -130)
 MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -158,7 +140,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.5 - Fix Sell"
+Title.Text = "Prism Hub v2.6"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
@@ -224,7 +206,7 @@ local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     ContentFrame.Visible = not isMinimized
-    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 240)
+    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 260)
     MinimizeBtn.Text = isMinimized and "+" or "-"
 end)
 
@@ -233,6 +215,8 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
-CreateToggle("Auto Coletar & Vender", "AutoFarmFull")
+-- Botões Separados para Teste Seguro
+CreateToggle("Auto Coletar Madeira (E)", "AutoCollect")
+CreateToggle("Auto Vender / Processar (E)", "AutoSell")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Ativar NoClip", "NoClip")
