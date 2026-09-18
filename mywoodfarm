@@ -1,4 +1,4 @@
--- [[ PRISM HUB v2.8 - MY BASE ONLY TELEPORT ]]
+-- [[ PRISM HUB v2.9 - UNIVERSAL BASE LOCATOR & TELEPORT ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -10,6 +10,7 @@ if CoreGui:FindFirstChild("PrismHubUI") then
     CoreGui.PrismHubUI:Destroy()
 end
 
+-- Anti-AFK
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new(0, 0))
@@ -22,6 +23,8 @@ local Settings = {
     NoClip = false
 }
 
+local CustomBaseCFrame = nil
+
 local function TriggerPrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
         pcall(function()
@@ -30,50 +33,39 @@ local function TriggerPrompt(prompt)
     end
 end
 
--- ENCONTRAR APENAS A SUA PARCELA/BASE (MY PLOT)
-local function GetMyBasePlot()
-    if Workspace:FindFirstChild("Plots") then
-        for _, plot in ipairs(Workspace.Plots:GetChildren()) do
-            -- Verifica se o dono do Plot é o LocalPlayer
-            local owner = plot:FindFirstChild("Owner") or plot:FindFirstChild("OwnerValue")
-            if owner and (owner.Value == LocalPlayer or owner.Value == LocalPlayer.Name) then
-                return plot
+-- Sistema Inteligente de Localização de Base
+local function GetMyBaseCFrame()
+    -- Prioridade 1: Posição Manual Salva pelo Jogador
+    if CustomBaseCFrame then
+        return CustomBaseCFrame
+    end
+
+    -- Prioridade 2: Busca por Owner igual ao LocalPlayer em todo o Workspace
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Owner" or obj.Name == "OwnerValue" or obj.Name == "Player" then
+            if obj:IsA("ObjectValue") and obj.Value == LocalPlayer then
+                local parentPart = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
+                if parentPart then return parentPart.CFrame end
+            elseif obj:IsA("StringValue") and (obj.Value == LocalPlayer.Name or obj.Value == tostring(LocalPlayer.UserId)) then
+                local parentPart = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
+                if parentPart then return parentPart.CFrame end
             end
         end
     end
-    -- Busca alternativa pelo mapa
-    for _, plot in ipairs(Workspace:GetChildren()) do
-        if plot.Name:find("Plot") or plot.Name:find("Land") then
-            local owner = plot:FindFirstChild("Owner")
-            if owner and owner.Value == LocalPlayer then
-                return plot
+
+    -- Prioridade 3: Encontrar SpawnPad próximo
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        for _, spawn in ipairs(Workspace:GetDescendants()) do
+            if spawn:IsA("SpawnLocation") and (spawn.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 100 then
+                return spawn.CFrame
             end
         end
     end
+
     return nil
 end
 
--- ENCONTRAR O PONTO DE VENDA DENTRO DA SUA BASE
-local function GetMySellCFrame()
-    local myPlot = GetMyBasePlot()
-    if myPlot then
-        for _, obj in ipairs(myPlot:GetDescendants()) do
-            local name = obj.Name:lower()
-            if name:find("sell") or name:find("chipper") or name:find("sawmill") or name:find("deposit") or name:find("collector") then
-                if obj:IsA("BasePart") then
-                    return obj.CFrame
-                elseif obj:IsA("ProximityPrompt") and obj.Parent and obj.Parent:IsA("BasePart") then
-                    return obj.Parent.CFrame
-                end
-            end
-        end
-        -- Se não achar ponto com nome específico, pega a parte principal do plot
-        if myPlot:IsA("BasePart") then return myPlot.CFrame end
-    end
-    return nil
-end
-
--- LOOP 1: AUTO COLETAR MADEIRA
+-- LOOP 1: AUTO COLETAR
 task.spawn(function()
     while task.wait(0.4) do
         if Settings.AutoCollect then
@@ -101,28 +93,30 @@ task.spawn(function()
     end
 end)
 
--- LOOP 2: AUTO VENDER (TELEPORTA APENAS PARA A SUA BASE E DISPARA "E")
+-- LOOP 2: AUTO VENDER COM TELEPORTE
 task.spawn(function()
-    while task.wait(0.8) do
+    while task.wait(1) do
         if Settings.AutoSell then
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                local mySellCFrame = GetMySellCFrame()
-                if mySellCFrame then
-                    -- Teleporta para a SUA serraria
-                    hrp.CFrame = mySellCFrame + Vector3.new(0, 3, 0)
-                    task.wait(0.2)
+                local baseCF = GetMyBaseCFrame()
+                if baseCF then
+                    -- Teleporta para a base encontrada ou configurada
+                    hrp.CFrame = baseCF + Vector3.new(0, 4, 0)
+                    task.wait(0.3)
 
-                    -- Dispara apenas prompts na SUA base
-                    local myPlot = GetMyBasePlot()
-                    local searchArea = myPlot or Workspace
-                    for _, prompt in ipairs(searchArea:GetDescendants()) do
+                    -- Ativa os prompts da serraria
+                    for _, prompt in ipairs(Workspace:GetDescendants()) do
                         if not Settings.AutoSell then break end
                         if prompt:IsA("ProximityPrompt") then
-                            TriggerPrompt(prompt)
+                            local name = prompt.Name:lower()
+                            local pName = (prompt.Parent and prompt.Parent.Name or ""):lower()
+                            if name:find("sell") or pName:find("sell") or name:find("chipper") or pName:find("chipper") or name:find("deposit") or pName:find("saw") then
+                                TriggerPrompt(prompt)
+                            end
                         end
                     end
                 end
@@ -165,8 +159,8 @@ ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 280, 0, 260)
-MainFrame.Position = UDim2.new(0.5, -140, 0.4, -130)
+MainFrame.Size = UDim2.new(0, 280, 0, 310)
+MainFrame.Position = UDim2.new(0.5, -140, 0.4, -155)
 MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -175,6 +169,7 @@ MainFrame.Parent = ScreenGui
 
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
+-- Header
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 35)
 Header.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
@@ -187,7 +182,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.8 (My Base)"
+Title.Text = "Prism Hub v2.9"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
@@ -249,11 +244,33 @@ local function CreateToggle(text, key)
     end)
 end
 
+-- Botão de Definir Posição da Base
+local SetBaseBtn = Instance.new("TextButton")
+SetBaseBtn.Size = UDim2.new(1, 0, 0, 36)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(70, 50, 120)
+SetBaseBtn.Text = "📍 Salvar Minha Posição Atual Como Base"
+SetBaseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+SetBaseBtn.TextSize = 12
+SetBaseBtn.Parent = ContentFrame
+Instance.new("UICorner", SetBaseBtn).CornerRadius = UDim.new(0, 6)
+
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        CustomBaseCFrame = char.HumanoidRootPart.CFrame
+        SetBaseBtn.Text = "✅ Base Salva Com Sucesso!"
+        SetBaseBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
+        task.wait(2)
+        SetBaseBtn.Text = "📍 Atualizar Posição da Base"
+    end
+end)
+
 local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     ContentFrame.Visible = not isMinimized
-    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 260)
+    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 310)
     MinimizeBtn.Text = isMinimized and "+" or "-"
 end)
 
@@ -263,6 +280,6 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 CreateToggle("Auto Coletar Madeira (E)", "AutoCollect")
-CreateToggle("Auto Teleport Minha Base & Vender", "AutoSell")
+CreateToggle("Auto Teleport Base & Vender", "AutoSell")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Ativar NoClip", "NoClip")
