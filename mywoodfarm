@@ -1,12 +1,13 @@
--- [[ PRISM HUB v2.4 - AUTOMATED FARM & SELL LOOP ]]
+-- [[ PRISM HUB v2.5 - FIX AUTO SELL ]]
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
 
--- Destruir interfaces antigas duplicadas
+-- Limpa UIs antigas
 if CoreGui:FindFirstChild("PrismHubUI") then
     CoreGui.PrismHubUI:Destroy()
 end
@@ -19,12 +20,24 @@ end)
 
 local Settings = {
     AutoFarmFull = false,
-    AutoChipper = false,
     AutoRollLever = false,
     NoClip = false
 }
 
--- Função segura para simular o pressionamento da tecla "E"
+-- Função para encontrar a zona de venda (Plot / Sell Area)
+local function GetSellTarget()
+    -- Tenta encontrar a área de venda no mapa
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name:find("Sell") or obj.Name:find("Collector") or obj.Name:find("Dump") then
+            if obj:IsA("BasePart") then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
+-- Simular Tecla "E"
 local function TriggerPrompt(prompt)
     if prompt and prompt:IsA("ProximityPrompt") and prompt.Enabled then
         pcall(function()
@@ -33,40 +46,53 @@ local function TriggerPrompt(prompt)
     end
 end
 
--- Loop Principal de Automação (Coleta + Venda/Processamento na Serraria)
+-- LOOP PRINCIPAL: Coletar e Vender
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.3) do
         if Settings.AutoFarmFull then
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                -- 1. BUSCA E COLETA MADEIRA PRÓXIMA (Pressiona "E")
+                local sellZone = GetSellTarget()
+
+                -- 1. Coletar Madeiras Próximas via ProximityPrompt
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if not Settings.AutoFarmFull then break end
                     if obj:IsA("ProximityPrompt") then
                         local parentName = obj.Parent and obj.Parent.Name or ""
                         if parentName:find("Wood") or parentName:find("Log") or parentName:find("Tree") or obj.Name:find("Wood") then
                             local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart")
-                            if part and (part.Position - hrp.Position).Magnitude <= (obj.MaxActivationDistance or 25) then
+                            if part and (part.Position - hrp.Position).Magnitude <= 25 then
                                 TriggerPrompt(obj)
-                                task.wait(0.2)
                             end
                         end
                     end
                 end
 
-                -- 2. VAI ATÉ A SERRARIA / PROCESSADOR E PRESSIONA "E" PARA VENDER
-                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                -- 2. Vender Madeiras no Chão / Inventário
+                -- Move as peças de madeira diretamente para o ponto de venda do terreno
+                for _, log in ipairs(Workspace:GetDescendants()) do
                     if not Settings.AutoFarmFull then break end
-                    if prompt:IsA("ProximityPrompt") then
-                        local pName = prompt.Name
-                        local parentName = prompt.Parent and prompt.Parent.Name or ""
+                    if (log.Name:find("Log") or log.Name:find("Wood")) and log:IsA("BasePart") then
+                        if sellZone then
+                            log.CFrame = sellZone.CFrame
+                        end
+                        if log:FindFirstChildOfClass("TouchTransmitter") or log:FindFirstChild("TouchInterest") then
+                            firetouchinterest(hrp, log, 0)
+                            task.wait(0.02)
+                            firetouchinterest(hrp, log, 1)
+                        end
+                    end
+                end
 
-                        -- Procura por gatilhos de Venda, Serraria ou Processador (Sawmill / Sell / Chipper)
-                        if pName:find("Sell") or parentName:find("Sell") or pName:find("Saw") or parentName:find("Saw") or pName:find("Chipper") or parentName:find("Chipper") then
-                            TriggerPrompt(prompt)
+                -- 3. Dispara os eventos remotos de venda de emergência
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("Events")
+                if remotes then
+                    for _, remote in ipairs(remotes:GetChildren()) do
+                        if remote.Name:find("Sell") then
+                            remote:FireServer()
                         end
                     end
                 end
@@ -75,17 +101,15 @@ task.spawn(function()
     end
 end)
 
--- Loop Secundário (Alavanca/Rolls isolados)
+-- Loop da Alavanca / Roleta
 task.spawn(function()
     while task.wait(0.8) do
         if Settings.AutoRollLever then
             pcall(function()
                 for _, prompt in ipairs(Workspace:GetDescendants()) do
                     if not Settings.AutoRollLever then break end
-                    if prompt:IsA("ProximityPrompt") then
-                        if prompt.Name:find("Lever") or (prompt.Parent and prompt.Parent.Name:find("Lever")) then
-                            TriggerPrompt(prompt)
-                        end
+                    if prompt:IsA("ProximityPrompt") and (prompt.Name:find("Lever") or (prompt.Parent and prompt.Parent.Name:find("Lever"))) then
+                        TriggerPrompt(prompt)
                     end
                 end
             end)
@@ -104,26 +128,22 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- ====================================================================
--- INTERFACE GRÁFICA (UI)
--- ====================================================================
+-- INTERFACE GRÁFICA
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrismHubUI"
 ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 280, 0, 280)
-MainFrame.Position = UDim2.new(0.5, -140, 0.4, -140)
+MainFrame.Size = UDim2.new(0, 280, 0, 240)
+MainFrame.Position = UDim2.new(0.5, -140, 0.4, -120)
 MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
-local UICorner = Instance.new("UICorner", MainFrame)
-UICorner.CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
 -- Header
 local Header = Instance.new("Frame")
@@ -132,21 +152,19 @@ Header.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
 Header.BorderSizePixel = 0
 Header.Parent = MainFrame
 
-local HeaderCorner = Instance.new("UICorner", Header)
-HeaderCorner.CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 8)
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -70, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Prism Hub v2.4 - Auto Farm"
+Title.Text = "Prism Hub v2.5 - Fix Sell"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
 
--- Botão Minimizar (-)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 24, 0, 24)
 MinimizeBtn.Position = UDim2.new(1, -54, 0, 5)
@@ -154,13 +172,9 @@ MinimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 MinimizeBtn.Text = "-"
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.Font = Enum.Font.SourceSansBold
-MinimizeBtn.TextSize = 16
 MinimizeBtn.Parent = Header
+Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
 
-local MinCorner = Instance.new("UICorner", MinimizeBtn)
-MinCorner.CornerRadius = UDim.new(0, 4)
-
--- Botão Fechar (X)
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 24, 0, 24)
 CloseBtn.Position = UDim2.new(1, -28, 0, 5)
@@ -168,15 +182,10 @@ CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.Font = Enum.Font.SourceSansBold
-CloseBtn.TextSize = 13
 CloseBtn.Parent = Header
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 4)
 
-local CloseCorner = Instance.new("UICorner", CloseBtn)
-CloseCorner.CornerRadius = UDim.new(0, 4)
-
--- Content Frame
 local ContentFrame = Instance.new("Frame")
-ContentFrame.Name = "ContentFrame"
 ContentFrame.Size = UDim2.new(1, -16, 1, -45)
 ContentFrame.Position = UDim2.new(0, 8, 0, 40)
 ContentFrame.BackgroundTransparency = 1
@@ -184,7 +193,6 @@ ContentFrame.Parent = MainFrame
 
 local Layout = Instance.new("UIListLayout")
 Layout.Parent = ContentFrame
-Layout.SortOrder = Enum.SortOrder.LayoutOrder
 Layout.Padding = UDim.new(0, 6)
 
 local function CreateToggle(text, key)
@@ -196,9 +204,7 @@ local function CreateToggle(text, key)
     Btn.Font = Enum.Font.SourceSansSemibold
     Btn.TextSize = 13
     Btn.Parent = ContentFrame
-
-    local BtnCorner = Instance.new("UICorner", Btn)
-    BtnCorner.CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
 
     Btn.MouseButton1Click:Connect(function()
         Settings[key] = not Settings[key]
@@ -214,23 +220,19 @@ local function CreateToggle(text, key)
     end)
 end
 
--- Ações Minimizar/Fechar
 local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     ContentFrame.Visible = not isMinimized
-    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 280)
+    MainFrame.Size = isMinimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 240)
     MinimizeBtn.Text = isMinimized and "+" or "-"
 end)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    for k in pairs(Settings) do
-        Settings[k] = false
-    end
+    for k in pairs(Settings) do Settings[k] = false end
     ScreenGui:Destroy()
 end)
 
--- Botões do Menu
-CreateToggle("Auto Coletar & Vender (Full Loop)", "AutoFarmFull")
+CreateToggle("Auto Coletar & Vender", "AutoFarmFull")
 CreateToggle("Auto Roleta / Alavanca", "AutoRollLever")
 CreateToggle("Ativar NoClip", "NoClip")
